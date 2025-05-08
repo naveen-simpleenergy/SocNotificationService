@@ -7,7 +7,6 @@ from utils  import setup_flink_environment,KafkaConfig,NotificationService
 import os,json,logging
 from utils import MessagePayload
 from udfs import VehicleStateProcessor
-from udfs import PrintCoProcess
 load_dotenv()
 import sys
 

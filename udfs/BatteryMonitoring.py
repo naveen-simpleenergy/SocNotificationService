@@ -70,22 +70,36 @@ class VehicleStateProcessor(CoProcessFunction):
             time_diff = abs(hmi_time - bcm_time)
             if time_diff <= 60000:
                 event_time = max(hmi_time, bcm_time)
-                event_dt = datetime.fromtimestamp(event_time // 1000, tz=timezone.utc)
+                # event_dt = datetime.fromtimestamp(event_time // 1000, tz=timezone.utc)
+                event_dt=event_time
                 
                 if soc is not None and soc <= 20 and charging == 0:
-                    self.output(vin, event_dt, "Critical battery level! Please plug in charger immediately.")
+                    self._send_alert(vin, event_dt, "Critical battery level! Please plug in charger immediately.")
                 
                 if soc is not None and soc >= 100 and charging == 1:
-                    self.output(vin, event_dt, "Battery fully charged! Please disconnect charger.")
+                    self._send_alert(vin, event_dt, "Battery fully charged! Please disconnect charger.")
                 
                 if prev_charging is not None and charging != prev_charging:
                     status = "connected" if charging == 1 else "disconnected"
-                    self.output(vin, event_dt, f"Charger {status}. Current SOC: {soc}%")
+                    self._send_alert(vin, event_dt, f"Charger {status}. Current SOC: {soc}%")
                 # Clear state after notification window
                 self._clear_states()
 
-    def output(self, vin, timestamp, message):
-        print(f"Notification sent to {vin}: {message} ")
+    def _send_alert(self, vin, timestamp, message):
+        try:
+            print(f"Sending notification to {vin}: {message} at {timestamp}")
+            
+            self.notification_service.send_notification(
+                recipient="naveen@simpleenergy.in",
+                vin=vin,
+                timestamp=timestamp,
+                message=message
+            )
+            
+            print(f"Notification successfully sent to {vin}")
+        except Exception as e:
+            print(f"Notification failed for {vin}: {str(e)}")
+
 
     def _clear_states(self):
         self.hmi_time_state.clear()

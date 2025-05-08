@@ -19,7 +19,7 @@ class NotificationService():
         self.api_endpoint =os.getenv("API_ENDPOINT") 
         self.timeout = 5
     
-    def send_notification(self, recipient: List[str], vin: str, timestamp: datetime, message: str) -> bool:
+    def send_notification(self, recipient: str, vin: str, timestamp: datetime, message: str) -> bool:
         """
         Send notification to configured API endpoint.
         
@@ -38,14 +38,20 @@ class NotificationService():
             "x-api-key": self.api_key,
             "Content-Type": "application/json"
         }
+        print(f"ATTEMPTING TO SEND: {message} to {recipient}")
+        print(f"API ENDPOINT: {self.api_endpoint}")
+        print(f"API KEY Present: {'Yes' if self.api_key else 'No'}")
         
         try:
-            response = requests.post(self.api_endpoint,json=payload, headers=headers, timeout=5 )            
+            response = requests.post(self.api_endpoint, json=payload, headers=headers, timeout=5)            
             response.raise_for_status()
             return True
         except requests.RequestException as e:
             print(f"Notification API error: {str(e)}")
             return False
+    
+
+
     
     def _build_payload(self, recipient: str, vin: str, timestamp: datetime, message: str) -> Dict:
         """Construct the API request payload"""
