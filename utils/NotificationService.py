@@ -1,3 +1,4 @@
+from bson import Timestamp
 import requests
 import os
 from datetime import datetime, timezone, timedelta
@@ -19,28 +20,24 @@ class NotificationService():
         self.api_endpoint =os.getenv("API_ENDPOINT") 
         self.timeout = 5
     
-    def send_notification(self, recipient: str, vin: str, timestamp: datetime, message: str) -> bool:
+    def send_notification(self, vin: str, timestamp: Timestamp,soc:float, event: str) -> bool:
         """
         Send notification to configured API endpoint.
         
         Args:
-            recipient: vehicle owner
             vin: Vehicle identification number
             timestamp: When the event occurred,
-            message: Human-readable message
-            
+            message: Human-readable message           
+            event_type: Type of the event being notified
         Returns:
             bool: True if notification was successfully sent
         """
-        payload = self._build_payload(recipient=recipient, vin=vin, timestamp=timestamp, message=message)
+        payload = self._build_payload(vin=vin, timestamp=timestamp, soc=soc, event=event)
         
         headers = {
             "x-api-key": self.api_key,
             "Content-Type": "application/json"
         }
-        print(f"ATTEMPTING TO SEND: {message} to {recipient}")
-        print(f"API ENDPOINT: {self.api_endpoint}")
-        print(f"API KEY Present: {'Yes' if self.api_key else 'No'}")
         
         try:
             response = requests.post(self.api_endpoint, json=payload, headers=headers, timeout=5)            
@@ -53,18 +50,16 @@ class NotificationService():
 
 
     
-    def _build_payload(self, recipient: str, vin: str, timestamp: datetime, message: str) -> Dict:
+    def _build_payload(self, vin: str, timestamp: Timestamp, soc:float,event:str) -> Dict:
         """Construct the API request payload"""
         return {
-            "channel": ["mail"],
+            "channel": ["push"],
             "type": "alert",
             "data": {
-                "notification_id": str(uuid.uuid4()),
-                "event_type": "soc-notification",
+                "event": event,
                 "vehicle": vin,
                 "timestamp": self._format_timestamp(timestamp),
-                "message": message,
-                "email": recipient
+                "soc": soc,
             }
         }
     

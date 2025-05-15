@@ -62,7 +62,7 @@ class KafkaConfig:
             .set_bootstrap_servers(KafkaConfig.CONSUMER_BROKER) \
             .set_topics(KafkaConfig.INPUT_TOPIC_1) \
             .set_group_id(KafkaConfig.CONSUMER_GROUP_ID) \
-            .set_starting_offsets(KafkaOffsetsInitializer.earliest()) \
+            .set_starting_offsets(KafkaOffsetsInitializer.latest()) \
             .set_value_only_deserializer(SimpleStringSchema()) \
             .set_property("security.protocol", KafkaConfig.SECURITY_PROTOCOL) \
             .set_property("sasl.mechanism", KafkaConfig.SASL_MECHANISMS) \
@@ -77,7 +77,7 @@ class KafkaConfig:
             .set_bootstrap_servers(KafkaConfig.CONSUMER_BROKER) \
             .set_topics(KafkaConfig.INPUT_TOPIC_2) \
             .set_group_id(KafkaConfig.CONSUMER_GROUP_ID) \
-            .set_starting_offsets(KafkaOffsetsInitializer.earliest()) \
+            .set_starting_offsets(KafkaOffsetsInitializer.latest()) \
             .set_value_only_deserializer(SimpleStringSchema()) \
             .set_property("security.protocol", KafkaConfig.SECURITY_PROTOCOL) \
             .set_property("sasl.mechanism", KafkaConfig.SASL_MECHANISMS) \
