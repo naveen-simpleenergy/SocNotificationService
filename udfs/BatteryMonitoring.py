@@ -1,11 +1,8 @@
-from doctest import debug
-import time
 from pyflink.datastream.functions import CoProcessFunction
 from pyflink.datastream.state import ValueStateDescriptor
 from pyflink.common.typeinfo import Types
 from datetime import datetime, timezone
 from utils import MessagePayload, NotificationService
-
 
 class VehicleStateProcessor(CoProcessFunction):
     def __init__(self):
@@ -33,7 +30,6 @@ class VehicleStateProcessor(CoProcessFunction):
             ValueStateDescriptor("last_event_type", Types.STRING()))
         self.has_seen_charger_connected_state = runtime_context.get_state(
             ValueStateDescriptor("has_seen_charger_connected_state", Types.BOOLEAN()))
-
 
     def process_element1(self, hmi_msg: MessagePayload, ctx):
         soc = float(hmi_msg.message_json.get('EffectiveSOC', 0.0))
@@ -70,7 +66,6 @@ class VehicleStateProcessor(CoProcessFunction):
             self._maybe_notify(vin)
 
     def _maybe_notify(self, vin):
-    
         hmi_time = self.hmi_time_state.value()
         bcm_time = self.bcm_time_state.value()
         
@@ -85,34 +80,41 @@ class VehicleStateProcessor(CoProcessFunction):
         prev_charging = self.prev_charging_state.value()
         last_event = self.last_event_type.value()
         event_time = max(hmi_time, bcm_time)
-        debug_time =event_time
-        event_dt = datetime.fromtimestamp(event_time // 1000, tz=timezone.utc)
+        debug_time = event_time
+        # event_dt = datetime.fromtimestamp(event_time // 1000, tz=timezone.utc)
 
         if soc == 100:
-            if charging == 1 and last_event != "battery-full":
-                self._send_alert(vin, debug_time, event_dt, soc, "battery-full")
+            new_event = "batteryfull" if charging == 1 else None
+            if new_event and new_event != last_event:
+                self._send_alert(vin, debug_time, soc, new_event)
+                self.has_seen_charger_connected_state.update(False)
             return
 
-        if soc == 20 and charging == 0:
-            if last_event != "low-battery":
-                self._send_alert(vin, debug_time, event_dt, soc, "low-battery")
-            return
-        elif soc == 20 and charging == 1 :
+        if soc == 20:
+            new_event = "lowbattery" if charging == 0 else None
+            if new_event and new_event != last_event:
+                self._send_alert(vin, debug_time, soc, new_event)
             return
 
         if prev_charging is not None and charging != prev_charging:
-            if charging == 1 and last_event != "charger-connected":
-                self._send_alert(vin,debug_time, event_dt,soc,"charger-connected")
-            elif charging == 0 and last_event != "charger-disconnected":
-                self._send_alert(vin, debug_time,event_dt,soc,"charger-disconnected")
+            if charging == 1:
+                new_event = "chargerconnected"
+                if new_event != last_event:
+                    self._send_alert(vin, debug_time, soc, new_event)
+                    self.has_seen_charger_connected_state.update(True)
+            elif charging == 0:
+                if self.has_seen_charger_connected_state.value():
+                    new_event = "chargerdisconnected"
+                    if new_event != last_event:
+                        self._send_alert(vin, debug_time, soc, new_event)
+                        self.has_seen_charger_connected_state.update(False)
 
-    def _send_alert(self, vin, debug_time, timestamp,soc, event):
+    def _send_alert(self, vin, debug_time, soc, event):
         try:
             print(f"Sending '{event}' notification for VIN={vin}: {soc} at {debug_time}")
             self.last_event_type.update(event)
             self.notification_service.send_notification(
                 vin=vin,
-                timestamp=timestamp,
                 soc=soc,
                 event=event,
             )
