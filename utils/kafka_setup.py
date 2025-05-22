@@ -37,12 +37,12 @@ class KafkaConfig:
         )
 
         try:
-            topic_metadata = admin_client.describe_topics([KafkaConfig.INPUT_TOPIC])
+            topic_metadata = admin_client.describe_topics([KafkaConfig.INPUT_TOPIC_1])
 
-            topic_info = next((topic for topic in topic_metadata if topic['topic'] == KafkaConfig.INPUT_TOPIC), None)
+            topic_info = next((topic for topic in topic_metadata if topic['topic'] == KafkaConfig.INPUT_TOPIC_1), None)
 
             if topic_info is None:
-                raise ValueError(f"Topic {KafkaConfig.INPUT_TOPIC} not found")
+                raise ValueError(f"Topic {KafkaConfig.INPUT_TOPIC_1} not found")
 
             if topic_info['error_code'] != 0:
                 raise ValueError(f"Error fetching topic metadata: {topic_info['error_code']}")

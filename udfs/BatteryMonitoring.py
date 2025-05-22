@@ -81,7 +81,6 @@ class VehicleStateProcessor(CoProcessFunction):
         last_event = self.last_event_type.value()
         event_time = max(hmi_time, bcm_time)
         debug_time = event_time
-        # event_dt = datetime.fromtimestamp(event_time // 1000, tz=timezone.utc)
 
         if soc == 100:
             new_event = "batteryfull" if charging == 1 else None
@@ -98,13 +97,13 @@ class VehicleStateProcessor(CoProcessFunction):
 
         if prev_charging is not None and charging != prev_charging:
             if charging == 1:
-                new_event = "chargerconnected"
+                new_event = "chargingStarted"
                 if new_event != last_event:
                     self._send_alert(vin, debug_time, soc, new_event)
                     self.has_seen_charger_connected_state.update(True)
             elif charging == 0:
                 if self.has_seen_charger_connected_state.value():
-                    new_event = "chargerdisconnected"
+                    new_event = "chargerRemoved"
                     if new_event != last_event:
                         self._send_alert(vin, debug_time, soc, new_event)
                         self.has_seen_charger_connected_state.update(False)
