@@ -75,8 +75,7 @@ class VehicleStateProcessor(CoProcessFunction):
         if abs(hmi_time - bcm_time) > 60000:
             return
         
-        print(f"Processing notification for VIN={vin} with HMI time {hmi_time} and BCM time {bcm_time} and soc: {self.current_soc_state.value()} ")
-        print(f"Current SOC: {self.current_soc_state.value()}, Current Charging State: {self.current_charging_state.value()}, Previous Charging State: {self.prev_charging_state.value()}")
+        
         print(f"Last Event Type: {self.last_event_type.value()}, Has Seen Charger Connected State: {self.has_seen_charger_connected_state.value()}")
         
         soc = self.current_soc_state.value()
@@ -88,6 +87,7 @@ class VehicleStateProcessor(CoProcessFunction):
         if soc == 100:
             new_event = "batteryfull" if charging == 1 else None
             if new_event and new_event != last_event:
+                print(f"Last Event Type: {last_event}, Has Seen Charger Connected State: {self.has_seen_charger_connected_state.value()}")
                 self._send_alert(vin, event_time, soc, new_event)
                 self.has_seen_charger_connected_state.update(False)
             return
@@ -95,6 +95,7 @@ class VehicleStateProcessor(CoProcessFunction):
         if soc == 20:
             new_event = "lowbattery" if charging == 0 else None
             if new_event and new_event != last_event:
+                print(f"Last Event Type: {last_event}, Has Seen Charger Connected State: {self.has_seen_charger_connected_state.value()}")
                 self._send_alert(vin, event_time, soc, new_event)
             return
 
@@ -102,12 +103,16 @@ class VehicleStateProcessor(CoProcessFunction):
             if charging == 1:
                 new_event = "chargingStarted"
                 if new_event != last_event:
+                    print(f"Current SOC: {soc}, Current Charging State: {charging}, Previous Charging State: {prev_charging}")
+                    print(f"Last Event Type: {last_event}, Has Seen Charger Connected State: {self.has_seen_charger_connected_state.value()}")
                     self._send_alert(vin, event_time, soc, new_event)
                     self.has_seen_charger_connected_state.update(True)
             elif charging == 0:
                 if self.has_seen_charger_connected_state.value():
                     new_event = "chargerRemoved"
                     if new_event != last_event:
+                        print(f"Current SOC: {soc}, Current Charging State: {charging}, Previous Charging State: {prev_charging}")
+                        print(f"Last Event Type: {last_event}, Has Seen Charger Connected State: {self.has_seen_charger_connected_state.value()}")
                         self._send_alert(vin, event_time, soc, new_event)
                         self.has_seen_charger_connected_state.update(False)
 
