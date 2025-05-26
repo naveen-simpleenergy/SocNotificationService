@@ -8,7 +8,7 @@ class MessagePayload:
         self.message_json = json_message
         self.vin = json_message.get('vin', None)
         self.event_time = json_message.get('event_time', None)
-        self.filtered_fault_signals = None
+        
     
 
     def __str__(self):

@@ -19,44 +19,46 @@ class NotificationService():
         self.api_endpoint =os.getenv("API_ENDPOINT") 
         self.timeout = 5
     
-    def send_notification(self, vin: str, soc: float, event: str) -> bool:
+    def send_notification(self, vin: str, soc: Optional[float], event: str) -> bool:
         """
         Send notification to configured API endpoint.
         
         Args:
             vin: Vehicle identification number
-            event_type: Type of the event being notified
+            soc: State of charge (optional)
+            event: Type of the event being notified
         Returns:
             bool: True if notification was successfully sent
         """
-        payload = self._build_payload(vin=vin, soc=soc, event=event)
-        
+        payload = self._build_payload(vin, soc, event)
         headers = {
             "x-api-key": self.api_key,
             "Content-Type": "application/json"
         }
         
         try:
-            response = requests.post(self.api_endpoint, json=payload, headers=headers, timeout=5)            
+            response = requests.post(self.api_endpoint, json=payload, headers=headers, timeout=self.timeout)
             response.raise_for_status()
             return True
         except requests.RequestException as e:
-            print(f"Notification API error: {str(e)}")
+            print(f"[Notification Error] Event={event}, Error={e}")
             return False
     
 
 
     
-    def _build_payload(self, vin: str,soc:float,event:str) -> Dict:
+    def _build_payload(self, vin: str, soc: Optional[float], event: str) -> Dict:
         """Construct the API request payload"""
+        data = {
+            "event": event,
+            "vehicle": vin,
+            **({"soc": soc} if soc is not None else {})
+        }
+        
         return {
             "channel": ["push"],
             "type": "alert",
-            "data": {
-                "event": event,
-                "vehicle": vin,
-                "soc": soc,
-            }
+            "data": data
         }
     
     def _format_timestamp(self, dt: datetime) -> str:

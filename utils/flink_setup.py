@@ -4,10 +4,10 @@ from pathlib import Path
 from .kafka_setup import KafkaConfig
 
 def setup_flink_environment():
-    parallelism = KafkaConfig.get_kafka_partition_count()
+    # parallelism = KafkaConfig.get_kafka_partition_count()
     config = Configuration()
     env = StreamExecutionEnvironment.get_execution_environment(configuration=config)
-    env.set_parallelism(parallelism)
+    env.set_parallelism(10)
 
  
     checkpoint_config = env.get_checkpoint_config()
