@@ -54,7 +54,7 @@ class NotificationService():
             "type": "alert",
             "data": {
                 "event": event,
-                "vehicle": vin,
+                "vin": vin,
                 "soc": soc,
             }
         }
