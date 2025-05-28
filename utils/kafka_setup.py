@@ -1,3 +1,4 @@
+from sre_constants import IN
 from pyflink.datastream.connectors.kafka import KafkaSource, KafkaOffsetsInitializer
 from kafka.admin import KafkaAdminClient
 from pyflink.common.serialization import SimpleStringSchema
@@ -14,6 +15,8 @@ class KafkaConfig:
     INPUT_TOPIC_1 = os.getenv("INPUT_TOPIC_1")
     INPUT_TOPIC_2 = os.getenv("INPUT_TOPIC_2")
     INPUT_TOPIC_3 = os.getenv("INPUT_TOPIC_3")
+    INPUT_TOPIC_4 = os.getenv("INPUT_TOPIC_4")
+    INPUT_TOPIC_5 = os.getenv("INPUT_TOPIC_5")
     CONSUMER_GROUP_ID = os.getenv("CONSUMER_GROUP_ID")
     
     
@@ -87,12 +90,12 @@ class KafkaConfig:
                           f"username='{KafkaConfig.CONSUMER_USERNAME}' password='{KafkaConfig.CONSUMER_PASSWORD}';") \
             .set_property("enable.auto.commit", "true") \
             .build()
+
             
-    def create_geofence_source():
-        print("Creating geofence source with topic:", KafkaConfig.INPUT_TOPIC_3)
+    def create_location_coordinates_source():
         return KafkaSource.builder() \
             .set_bootstrap_servers(KafkaConfig.CONSUMER_BROKER) \
-            .set_topics(KafkaConfig.INPUT_TOPIC_3) \
+            .set_topics(KafkaConfig.INPUT_TOPIC_4) \
             .set_group_id(KafkaConfig.CONSUMER_GROUP_ID) \
             .set_starting_offsets(KafkaOffsetsInitializer.latest()) \
             .set_value_only_deserializer(SimpleStringSchema()) \
@@ -103,3 +106,20 @@ class KafkaConfig:
                           f"username='{KafkaConfig.CONSUMER_USERNAME}' password='{KafkaConfig.CONSUMER_PASSWORD}';") \
             .set_property("enable.auto.commit", "true") \
             .build()
+            
+    def create_geofence_source():
+        return KafkaSource.builder() \
+            .set_bootstrap_servers(KafkaConfig.CONSUMER_BROKER) \
+            .set_topics(KafkaConfig.INPUT_TOPIC_5) \
+            .set_group_id(KafkaConfig.CONSUMER_GROUP_ID) \
+            .set_starting_offsets(KafkaOffsetsInitializer.latest()) \
+            .set_value_only_deserializer(SimpleStringSchema()) \
+            .set_property("security.protocol", KafkaConfig.SECURITY_PROTOCOL) \
+            .set_property("sasl.mechanism", KafkaConfig.SASL_MECHANISMS) \
+            .set_property("sasl.jaas.config",
+                          f"org.apache.kafka.common.security.scram.ScramLoginModule required "
+                          f"username='{KafkaConfig.CONSUMER_USERNAME}' password='{KafkaConfig.CONSUMER_PASSWORD}';") \
+            .set_property("enable.auto.commit", "true") \
+            .build()
+
+

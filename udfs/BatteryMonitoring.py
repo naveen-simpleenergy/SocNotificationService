@@ -1,4 +1,4 @@
-from pyflink.datastream.functions import CoProcessFunction
+from pyflink.datastream.functions import CoProcessFunction, KeyedCoProcessFunction
 from pyflink.datastream.state import ValueStateDescriptor
 from pyflink.common.typeinfo import Types
 from datetime import datetime, timezone
@@ -13,6 +13,7 @@ class VehicleStateProcessor(CoProcessFunction):
         self.prev_charging_state = None
         self.last_event_type = None
         self.has_seen_charger_connected_state = None
+        self.range_state = None
         self.notification_service = NotificationService()
 
     def open(self, runtime_context):
@@ -30,6 +31,8 @@ class VehicleStateProcessor(CoProcessFunction):
             ValueStateDescriptor("last_event_type", Types.STRING()))
         self.has_seen_charger_connected_state = runtime_context.get_state(
             ValueStateDescriptor("has_seen_charger_connected_state", Types.BOOLEAN()))
+        self.range_state = runtime_context.get_state(
+            ValueStateDescriptor("range_state", Types.FLOAT()))
 
     def process_element1(self, hmi_msg: MessagePayload, ctx):
         soc = float(hmi_msg.message_json.get('EffectiveSOC'))
@@ -65,6 +68,11 @@ class VehicleStateProcessor(CoProcessFunction):
         if self.hmi_time_state.value() is not None:
             self._maybe_notify(vin)
 
+    def process_element3(self, range_msg: MessagePayload, ctx):
+        range_value = float(range_msg.message_json.get('BCM_RangeDisplay', None))
+        vin = range_msg.vin
+        
+        
     def _maybe_notify(self, vin):
         hmi_time = self.hmi_time_state.value()
         bcm_time = self.bcm_time_state.value()
@@ -110,6 +118,55 @@ class VehicleStateProcessor(CoProcessFunction):
                     if new_event != last_event:
                         self._send_alert(vin, event_time, soc, new_event)
                         self.has_seen_charger_connected_state.update(False)
+    
+    def on_timer(self, timestamp: int, ctx: 'KeyedCoProcessFunction.OnTimerContext'):
+        hmi_data = self.hmi_state.value()
+        bcm_data = self.bcm_state.value()
+
+        if hmi_data is None or bcm_data is None:
+            return
+
+        vin = hmi_data.get("vin") or bcm_data.get("vin")
+        soc = hmi_data.get("soc", -1)
+        vehicle_range = hmi_data.get("range", -1)
+        charging_status = hmi_data.get("charging_status", "").lower()
+        charger_connected = bcm_data.get("charger_connected", False)
+        event_time = hmi_data.get("timestamp") or bcm_data.get("timestamp")  # in ms
+
+        # Send SOC-based alerts
+        self.maybe_notify(vin=vin, soc=soc, charger_connected=charger_connected, timestamp=event_time)
+
+        # Send SOC + range when charging
+        is_charging = charging_status == "charging"
+        self.maybe_notify_range_soc(
+            vin=vin,
+            soc=soc,
+            range_value=vehicle_range,
+            timestamp=event_time,
+            charging=is_charging
+        )
+ 
+
+    def send_range_soc_update(self, vin: str, soc: float, range_value: float, timestamp: int, charging: bool):
+        """
+        Sends SOC + range notification only when charging and data is fresh.
+        """
+        # Convert timestamp (ms) to datetime
+        last_time = timestamp
+        event_dt = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
+
+        if (last_time - event_dt).total_seconds() > 60:
+            return
+
+        if charging and soc >= 0 and range_value >= 0:
+            self.notifier.send_range_soc_update(
+                vin=vin,
+                soc=soc,
+                range_value=range_value,
+                timestamp=event_dt
+            )
+
+        
 
     def _send_alert(self, vin, event_time, soc, event):
         try:

@@ -8,6 +8,8 @@ class MessagePayload:
         self.message_json = json_message
         self.vin = json_message.get('vin', None)
         self.event_time = json_message.get('event_time', None)
+        self.updated_at = json_message.get('updatedAt', None)
+        
         
     
 

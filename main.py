@@ -7,7 +7,7 @@ from udfs.GeofenceProcessor import GeofenceProcessFunction
 from utils  import setup_flink_environment,KafkaConfig,NotificationService
 import os,json,logging
 from utils import MessagePayload
-from udfs import VehicleStateProcessor,GeofenceProcessor
+from udfs import VehicleStateProcessor,GeofenceCoProcessFunction
 load_dotenv()
 import sys
 
@@ -16,6 +16,7 @@ def main():
     env = setup_flink_environment()
     hmi_source = KafkaConfig.create_hmi_source()
     bcm_source = KafkaConfig.create_bcm_source()
+    bcm_range_source = KafkaConfig.create_range_source()
     
     watermark_strategy = WatermarkStrategy.for_bounded_out_of_orderness(Duration.of_millis(5000))
     
@@ -34,13 +35,22 @@ def main():
     
     # pipeline for geofence data
     
-    geo_stream = env.from_source(source=KafkaConfig.create_geofence_source(), watermark_strategy=watermark_strategy, source_name="Geo Source")\
-                .map(MessagePayload, output_type=Types.PICKLED_BYTE_ARRAY())\
+    geo_fence_stream = env.from_source(source=KafkaConfig.create_geofence_source(), watermark_strategy=watermark_strategy, source_name="Geo Source")\
+                .map(lambda x: MessagePayload(x), output_type=Types.PICKLED_BYTE_ARRAY())\
                 .key_by(lambda payload: payload.vin)\
-                .process(GeofenceProcessFunction())
-    geo_stream.print()
+                
     
-
+    location_stream = env.from_source(source=KafkaConfig.create_location_coordinates_source(), watermark_strategy=watermark_strategy, source_name="Location Updates")\
+                .map(lambda x: MessagePayload(x), output_type=Types.PICKLED_BYTE_ARRAY())\
+                .key_by(lambda payload: payload.vin)\
+                    
+    connected_stream = geo_fence_stream.connect(location_stream).process(GeofenceCoProcessFunction())
+         
+               
+    connected_stream.print()
+    
+   
+    
     env.execute("real-time-vehicle-monitoring")
 
 
