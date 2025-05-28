@@ -25,7 +25,7 @@ def main():
     
     bcm_stream = env.from_source(source=bcm_source, watermark_strategy=watermark_strategy, source_name="BCM Source")\
                 .map( MessagePayload , output_type=Types.PICKLED_BYTE_ARRAY())\
-                .filter(lambda payload: 'BCM_ChargerDocked' in payload.message_json.keys() )\
+                .filter(lambda payload: 'BCM_ChargingOnProgress' in payload.message_json.keys() )\
                 .key_by(lambda payload: payload.vin)
     
 

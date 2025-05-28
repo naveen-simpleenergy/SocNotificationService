@@ -45,7 +45,7 @@ class VehicleStateProcessor(CoProcessFunction):
             self._maybe_notify(vin)
 
     def process_element2(self, bcm_msg: MessagePayload, ctx):
-        charging_status = int(bcm_msg.message_json.get('BCM_ChargerDocked'))
+        charging_status = int(bcm_msg.message_json.get('BCM_ChargingOnProgress'))
         vin = bcm_msg.vin
         bcm_time = bcm_msg.event_time
 
