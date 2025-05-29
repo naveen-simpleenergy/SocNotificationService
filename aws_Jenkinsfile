@@ -1,0 +1,428 @@
+pipeline {
+    agent any
+   
+    environment {
+        GOOGLE_CHAT_WEBHOOK = "https://chat.googleapis.com/v1/spaces/AAAAmNzVX-0/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=-ehw-co0VWGnsDY5SLqofPk6gX0TNB5vSvD_O0zO4Eo"
+        Git_Credentials = 'github-admin-pat'
+		Code_Repo = 'https://github.com/Simpleenergy-Pvt-Ltd/se-realtime-events.git'
+		Helm_Repo_Prod = 'https://github.com/Simpleenergy-Pvt-Ltd/se-kubernetes.git'
+        Helm_Repo_Stage = 'https://github.com/Simpleenergy-Pvt-Ltd/se-kubernetes.git'
+		// GIT_BRANCH = 'release/prod'
+    }
+    
+    stages {
+        stage('versioning') {
+            steps {
+                script {
+                    if(env.GIT_BRANCH == 'origin/release/stage'){
+                        def latestCommit = sh(script: "git rev-list --no-merges -n 1 HEAD", returnStdout: true).trim()
+                        def latestTagInfo = sh(script: "git describe --tags --abbrev=0 ${latestCommit}", returnStdout: true).trim()
+                        def latestTagCommit = sh(script: "git rev-list -n 1 ${latestTagInfo}", returnStdout: true).trim()
+                        if (latestTagCommit != latestCommit) {
+                            error "The latest tag (${latestTagInfo}) is associated with a previous commit (${latestTagCommit}). Please create a new tag for the current commit."
+                        } else {
+                            echo "Latest tag: ${latestTagInfo}"
+                        }
+
+                        env.GIT_TAG = latestTagInfo
+                        echo "Tagged - $latestTagInfo"
+                    }
+                    else if (env.GIT_BRANCH == 'origin/release/prod'){
+                        echo "Release tag: ${env.RELEASE_TAG}"
+                    }
+                }
+            }
+            post {
+                failure {
+                    script {
+                        if(env.GIT_BRANCH == 'origin/release/stage') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Versioning failed for STAGE 😬")
+                        } else if(env.GIT_BRANCH == 'origin/release/prod') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Versioning failed for PROD 😬")
+                        } 
+                    }
+                }
+            }
+        }
+
+        
+        stage('Environment') {
+    steps {
+        script {
+            if(env.GIT_BRANCH == 'master'){
+                // no dev
+            }
+            else if(env.GIT_BRANCH == 'origin/release/stage'){
+                // Stage environment variables
+                env.AWS_Account_Id              = "534375227638"
+                env.AWS_Region                  = "ap-south-1"
+                env.BRANCH                      = "release/stage" // Correct branch name without origin/
+                env.DOCKER_IMAGE_REPOSITORY_NAME= "se-stage-flink-realtime-events"
+                env.secretId                    = "flink/se-stage-realtime-events-envs"
+                env.IMAGE_TAG                   = GIT_TAG
+                // env.Helm_Branch                 = 'release/stage'
+                env.Microservice_Name           = 'realtime-events'
+                // env.Helm_Directory_Name         = 'deployment-tool/deployment-dashboard'
+                env.Namespace                   = 'flink-stage'
+                env.ENV_FILE                    = '/var/lib/jenkins/workspace/realtime-events/.env'
+                env.EKS_Cluster_Name            = 'simpleenergy-prod-eks-cluster'
+                // Set a local variable instead of modifying env
+                env.GIT_CHECKOUT_BRANCH = "release/stage"
+            }
+            else if(env.GIT_BRANCH == 'origin/release/prod'){
+                // Prod environment variables
+                env.AWS_Account_Id              = "534375227638"
+                env.AWS_Region                  = "ap-south-1"
+                env.BRANCH                      = "release/prod" // Correct branch name without origin/
+                env.DOCKER_IMAGE_REPOSITORY_NAME= "se-prod-flink-realtime-events"
+                env.secretId                    = "flink/se-prod-realtime-events-envs"
+                env.IMAGE_TAG                   = env.RELEASE_TAG
+                // env.Helm_Branch                 = 'release/prod'
+                env.Microservice_Name           = 'realtime-events'
+                // env.Helm_Directory_Name         = 'deployment-tool/deployment-dashboard'
+                env.Namespace                   = 'flink-prod'
+                env.ENV_FILE                    = '/var/lib/jenkins/workspace/realtime-events/.env'
+                env.EKS_Cluster_Name            = 'simpleenergy-prod-eks-cluster'
+                // Set a local variable instead of modifying env
+                env.GIT_CHECKOUT_BRANCH = "release/prod"
+            }
+        }
+    }
+    post {
+        failure {
+            script {
+                if(env.GIT_BRANCH == 'origin/release/stage') {
+                    sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Environment failed for STAGE 😬")
+                } else if(env.GIT_BRANCH == 'origin/release/prod') {
+                    sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Environment failed for PROD 😬")
+                } 
+            }
+        }
+    }
+}
+               
+        stage('Git Checkout') {
+    steps {
+        script {
+            git branch: "${env.GIT_CHECKOUT_BRANCH}", credentialsId: "${env.Git_Credentials}", url: "${env.Code_Repo}"
+        }
+    }
+    post {
+        failure {
+            script {
+                if(env.GIT_BRANCH == 'origin/release/stage') {
+                    sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Git Checkout failed for STAGE 😬")
+                } else if(env.GIT_BRANCH == 'origin/release/prod') {
+                    sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Git Checkout failed for PROD 😬")
+                } 
+            }
+        }
+    } 
+}
+
+        stage('Fetch Secrets') {
+            steps {
+                script {
+                    
+                    // Determine the secret ID based on the branch
+                    if (env.GIT_BRANCH == 'origin/release/stage') {
+                        echo "Fetching secrets for stage environment..."
+
+                    } else if (env.GIT_BRANCH == 'origin/release/prod') {
+                        echo "Fetching secrets for prod environment..."
+
+                    } else {
+                        error "Unsupported branch: ${env.GIT_BRANCH}. Only 'release/stage' and 'release/prod' are allowed."
+                    }
+        
+                    try {
+                        echo "Fetching secrets from AWS Secrets Manager..."
+                        
+                        // Fetch secrets from AWS Secrets Manager
+                        def secretsJson = sh(
+                            script: """
+                                aws secretsmanager get-secret-value --secret-id "${secretId}" --region "${AWS_Region}" --query SecretString --output text
+                            """,
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (!secretsJson) {
+                            error "Failed to fetch secrets for secret ID: ${secretId}"
+                        }
+        
+                        // Remove existing .env file if it exists
+                        if (fileExists(ENV_FILE)) {
+                            echo "Removing existing .env file..."
+                            sh "rm -f ${ENV_FILE}"
+                        }
+        
+                        // Write secrets.json to file
+                        writeFile file: 'secrets.json', text: secretsJson
+        
+                        // Parse JSON and convert to key="value" format
+                        def secrets = readJSON file: 'secrets.json'
+                        def envFileContent = secrets.collect { key, value ->
+                            "${key}=\"${value}\""
+                        }.join('\n')
+        
+                        // Write to .env file
+                        writeFile file: ENV_FILE, text: envFileContent
+        
+                        // Clean up temporary secrets.json
+                        sh "rm -f secrets.json"
+        
+                        echo "Secrets fetched and added to ${ENV_FILE} successfully."
+                    } catch (Exception e) {
+                        echo "An error occurred while fetching secrets: ${e.getMessage()}"
+                        error "Failed to fetch and process secrets."
+                    }
+                }
+            }
+            post {
+                failure {
+                    script {
+                        if(env.GIT_BRANCH == 'origin/release/stage') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Fetch Secrets failed for STAGE 😬")
+                        } else if(env.GIT_BRANCH == 'origin/release/prod') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Fetch Secrets failed for PROD 😬")
+                        } 
+                    }
+                }
+            }
+        }
+        
+        stage('build') {
+            steps {
+                script {
+                    sh " docker build -t ${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG} . "
+                }
+            }
+
+            post {
+                failure {
+                    script {
+                        if(env.GIT_BRANCH == 'origin/release/stage') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Build failed for STAGE 😬")
+                        } else if(env.GIT_BRANCH == 'origin/release/prod') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Build failed for PROD 😬")
+                        } 
+                    }
+                }
+            }
+        }
+        
+        stage('push') {
+            steps {
+                script {
+                    if (env.GIT_BRANCH == 'origin/release/stage') {
+                        sh """
+                            docker tag ${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG} ${env.AWS_Account_Id}.dkr.ecr.${env.AWS_Region}.amazonaws.com/${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG}
+                            echo "Pushing image To ECR ..."
+                            aws ecr get-login-password --region ${env.AWS_Region} | docker login --username AWS --password-stdin ${env.AWS_Account_Id}.dkr.ecr.${env.AWS_Region}.amazonaws.com
+                            docker push ${env.AWS_Account_Id}.dkr.ecr.${env.AWS_Region}.amazonaws.com/${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG}
+                            echo "Docker image pushed successfully."
+                            echo "Removing the Docker image running on Jenkins server..."
+                            docker rmi ${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG} --force
+                            docker rmi ${env.AWS_Account_Id}.dkr.ecr.${env.AWS_Region}.amazonaws.com/${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG} --force
+                        """
+                    } else if (env.GIT_BRANCH == 'origin/release/prod') {
+                        sh """
+                            docker tag ${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG} ${env.AWS_Account_Id}.dkr.ecr.${env.AWS_Region}.amazonaws.com/${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG}
+                            echo "Pushing image To ECR ..."
+                            aws ecr get-login-password --region ${env.AWS_Region} | docker login --username AWS --password-stdin ${env.AWS_Account_Id}.dkr.ecr.${env.AWS_Region}.amazonaws.com
+                            docker push ${env.AWS_Account_Id}.dkr.ecr.${env.AWS_Region}.amazonaws.com/${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG}
+                            echo "Docker image pushed successfully."
+                            echo "Removing the Docker image running on Jenkins server..."
+                            docker rmi ${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG} --force
+                            docker rmi ${env.AWS_Account_Id}.dkr.ecr.${env.AWS_Region}.amazonaws.com/${env.DOCKER_IMAGE_REPOSITORY_NAME}:${env.IMAGE_TAG} --force
+                        """
+                    }
+                }
+            }
+            post {
+                failure {
+                    script {
+                        if(env.GIT_BRANCH == 'origin/release/stage') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Build failed for STAGE 😬")
+                        } else if(env.GIT_BRANCH == 'origin/release/prod') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Build failed for PROD 😬")
+                        } 
+                    }
+                }
+            }
+        }
+
+//     stage('Clone Helm Charts') {
+//     steps {
+//         script {
+//             if (env.GIT_BRANCH == 'origin/release/stage') {
+//                 dir('helm-charts') {
+//                     echo "Cloning Helm charts from repository: ${env.Helm_Repo_Stage}"
+//                     git branch: "${env.Helm_Branch}", credentialsId: "${env.Git_Credentials}", url: "${env.Helm_Repo_Stage}"
+//                 }
+//             } else if (env.GIT_BRANCH == 'origin/release/prod') {
+//                 dir('helm-charts') {
+//                     echo "Cloning Helm charts from repository: ${env.Helm_Repo_Prod}"
+//                     git branch: "${env.Helm_Branch}", credentialsId: "${env.Git_Credentials}", url: "${env.Helm_Repo_Prod}"
+//                 }
+//             }
+//         }
+//     }
+//     post {
+//         failure {
+//             script {
+//                 if(env.GIT_BRANCH == 'origin/release/stage') {
+//                     sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Clone Helm Charts failed for STAGE 😬")
+//                 } else if(env.GIT_BRANCH == 'origin/release/prod') {
+//                     sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Clone Helm Charts failed for PROD 😬")
+//                 }
+//             }
+//         }
+//     }
+// }
+
+        // stage('Update tag in Helm Charts') {
+        //     steps {
+        //         script {
+        //             if (env.GIT_BRANCH == 'origin/release/stage') {
+        //                 dir('helm-charts') {
+        //                 // Define the values file based on the environment
+        //                 def valuesFilePath = "${env.Helm_Directory_Name}/values.yaml"
+                        
+        //                 // Update the tag in the values.yaml file
+        //                 sh """
+        //                 sed -i "s|tag:.*|tag: ${env.IMAGE_TAG}|" ${valuesFilePath}
+        //                 echo "Updated tag in values.yaml"
+        //                 """
+                        
+        //                 // Commit and push the changes with tag
+        //                 withCredentials([gitUsernamePassword(credentialsId: "${env.Git_Credentials}", gitToolName: 'Default')]) {
+        //                 sh """
+        //                     ls
+        //                     git config user.email "it.dev@simpleenergy.in"
+        //                     git config user.name "simpleenergyev"
+        //                     git add ${valuesFilePath}
+        //                     git commit -m 'Updated image tag ${env.IMAGE_TAG}'
+        //                     git tag ${env.Microservice_Name}-${env.IMAGE_TAG}
+        //                     git push origin HEAD:${env.Helm_Branch} --tags
+        //                     echo "pushed to kubernetes repository successfully"
+        //                 """
+        //                 }
+        //             }
+        //         }
+        //         else if (env.GIT_BRANCH == 'origin/release/prod') {
+        //             dir('helm-charts') {
+        //                 // Define the deployment file path based on the environment
+        //                 def deploymentFilePath = "${env.Helm_Directory_Name}/deployment.yml"
+                        
+        //                 // Update the image tag in the deployment.yaml file
+        //                 sh """
+        //                 sed -i 's|\\(image: .*:\\).*|\\1${env.IMAGE_TAG}|g' ${deploymentFilePath}
+        //                 echo "Updated image tag in deployment.yaml"
+        //                 """
+                        
+        //                 // Commit and push the changes with tag
+        //                 withCredentials([gitUsernamePassword(credentialsId: "${env.Git_Credentials}", gitToolName: 'Default')]) {
+        //                 sh """
+        //                 ls
+        //                 git config user.email "it.dev@simpleenergy.in"
+        //                 git config user.name "simpleenergyev"
+        //                 git add ${deploymentFilePath}
+        //                 git commit -m 'Updated image tag ${env.IMAGE_TAG}'
+        //                 git tag ${env.Microservice_Name}-${env.IMAGE_TAG}
+        //                 git push origin HEAD:${env.Helm_Branch} --tags
+        //                 echo "pushed to kubernetes repository successfully"
+        //                 """
+        //                 }
+        //             }
+        //             }
+        //     }
+        // }
+        //     post {
+        //         failure {
+        //             script {
+        //                 if(env.GIT_BRANCH == 'origin/release/stage') {
+        //                     sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Update tag in Helm Charts failed for STAGE 😬")
+        //                 } else if(env.GIT_BRANCH == 'origin/release/prod') {
+        //                     sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - update tag in Helm Charts failed for PROD 😬")
+        //                 } 
+        //             }
+        //         }
+        //     }
+        // }
+        
+        stage('Deploy to EKS') {
+            steps {
+                script {
+                    if (env.GIT_BRANCH == 'origin/release/stage') {
+                        echo "Deployment is to be made through Zeus"
+        
+                        // Update kubeconfig for the stage cluster
+                        // sh """
+                        //     aws eks update-kubeconfig --region ${env.AWS_Region} --name ${env.EKS_Cluster_Name}
+                        // """
+        
+                        // // Deploy Helm chart
+                        // dir('helm-charts') {
+                        //     sh """
+                        //         helm upgrade --install ${env.Microservice_Name} ${env.Helm_Directory_Name} \
+                        //         -n ${env.Namespace} --values ${env.Helm_Directory_Name}/values.yaml
+                        //     """
+                        // }
+        
+                        echo "Go to Zeus and Deploy."
+                    
+                    } 
+                    else if (env.GIT_BRANCH == 'origin/release/prod') {
+                        echo "Production deployments are handled manually. Skipping automatic deployment."
+                    } 
+                    else {
+                        echo "Unknown branch: ${env.GIT_BRANCH}. No deployment executed."
+                    }
+                }
+            }
+            post {
+                failure {
+                    script {
+                        if(env.GIT_BRANCH == 'origin/release/stage') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Deploy to EKS failed for STAGE 😬")
+                        } else if(env.GIT_BRANCH == 'origin/release/prod') {
+                            sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} - Deploy to EKS failed for PROD 😬")
+                        } 
+                    }
+                }
+            }
+        }  
+
+    stage('success') {
+        steps {
+            script {
+                sh 'echo build success'
+            }
+        }
+        post {
+            success {
+                script {
+                    sendGoogleChatNotification("Build Number: ${currentBuild.fullDisplayName} -  version: ${IMAGE_TAG} Build Successful ⚡")
+                    }
+                }
+            }
+        }
+    }    
+}
+
+def sendGoogleChatNotification(message) {
+    def url = env.GOOGLE_CHAT_WEBHOOK
+    def payload = [
+        text: message
+    ]
+    def response = httpRequest(
+        contentType: 'APPLICATION_JSON',
+        httpMode: 'POST',
+        requestBody: groovy.json.JsonOutput.toJson(payload),
+        url: url
+    )
+    if (response.status != 200) {
+        error "Failed to send message to Google Chat. HTTP status: ${response.status}, Response: ${response.content}"
+    }
+}
