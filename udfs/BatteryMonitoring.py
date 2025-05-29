@@ -83,7 +83,7 @@ class VehicleStateProcessor(CoProcessFunction):
         event_time = max(hmi_time, bcm_time)
 
         if soc == 100:
-            new_event = "batteryfull" if charging == 1 else None
+            new_event = "chargingCompleted" if charging == 1 else None
             if new_event and new_event != last_event:
                 print(f"Last Event Type: {last_event} for vin: {vin}, Has Seen Charger Connected State: {self.has_seen_charger_connected_state.value()}")
                 self._send_alert(vin, event_time, soc, new_event)
