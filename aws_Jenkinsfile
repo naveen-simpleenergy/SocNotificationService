@@ -61,10 +61,10 @@ pipeline {
                 env.secretId                    = "flink/se-stage-realtime-events-envs"
                 env.IMAGE_TAG                   = GIT_TAG
                 // env.Helm_Branch                 = 'release/stage'
-                env.Microservice_Name           = 'realtime-events'
+                env.Microservice_Name           = 'flink-stage-realtime-events'
                 // env.Helm_Directory_Name         = 'deployment-tool/deployment-dashboard'
                 env.Namespace                   = 'flink-stage'
-                env.ENV_FILE                    = '/var/lib/jenkins/workspace/realtime-events/.env'
+                env.ENV_FILE                    = '/var/lib/jenkins/workspace/flink-stage-realtime-events/.env'
                 env.EKS_Cluster_Name            = 'simpleenergy-prod-eks-cluster'
                 // Set a local variable instead of modifying env
                 env.GIT_CHECKOUT_BRANCH = "release/stage"
@@ -78,10 +78,10 @@ pipeline {
                 env.secretId                    = "flink/se-prod-realtime-events-envs"
                 env.IMAGE_TAG                   = env.RELEASE_TAG
                 // env.Helm_Branch                 = 'release/prod'
-                env.Microservice_Name           = 'realtime-events'
+                env.Microservice_Name           = 'flink-prod-realtime-events'
                 // env.Helm_Directory_Name         = 'deployment-tool/deployment-dashboard'
                 env.Namespace                   = 'flink-prod'
-                env.ENV_FILE                    = '/var/lib/jenkins/workspace/realtime-events/.env'
+                env.ENV_FILE                    = '/var/lib/jenkins/workspace/flink-prod-realtime-events/.env'
                 env.EKS_Cluster_Name            = 'simpleenergy-prod-eks-cluster'
                 // Set a local variable instead of modifying env
                 env.GIT_CHECKOUT_BRANCH = "release/prod"
