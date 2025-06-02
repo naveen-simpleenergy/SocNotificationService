@@ -39,7 +39,20 @@ class VehicleStateProcessor(CoProcessFunction):
         prev_hmi_time = self.hmi_time_state.value()
         if prev_hmi_time is None or hmi_time >= prev_hmi_time:
             self.hmi_time_state.update(hmi_time)
+            
+            
+            prev_soc = self.current_soc_state.value()
             self.current_soc_state.update(soc)
+
+            if  self.current_charging_state.value() == 1 and prev_soc is not None:
+                if soc != prev_soc and self.last_event_type.value() =='chargingStarted':
+                    yield {
+                        "vin": vin,
+                        "event": self.last_event_type.value(),
+                        "soc": soc,
+                        "event_time": hmi_time
+                        }
+                    
 
         if self.bcm_time_state.value() is not None :
             self._maybe_notify(vin)
@@ -118,10 +131,10 @@ class VehicleStateProcessor(CoProcessFunction):
         try:
             print(f"Sending '{event}' notification for VIN={vin}: {soc} at {event_time}")
             self.last_event_type.update(event)
-            self.notification_service.send_notification(
-                vin=vin,
-                soc=soc,
-                event=event,
-            )
+            # self.notification_service.send_notification(
+            #     vin=vin,
+            #     soc=soc,
+            #     event=event,
+            # )
         except Exception as e:
             print(f"Notification failed for VIN={vin}: {str(e)}")

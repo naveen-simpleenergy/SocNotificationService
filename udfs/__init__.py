@@ -1,1 +1,2 @@
 from .BatteryMonitoring import VehicleStateProcessor
+from .RangeProcessor import RangeJoinProcessor
