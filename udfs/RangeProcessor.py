@@ -22,40 +22,45 @@ class RangeJoinProcessor(KeyedCoProcessFunction):
         if event_data.get("event") != "chargingStarted":
             return
 
-        # Store event data
-        self.event_state.update(event_data)
         
-        # Get current range data
+        self.event_state.update(event_data)
         range_data = self.range_state.value()
-        self._process_and_notify(event_data, range_data)
+        
+        # if range_data:
+        #     self._process_and_notify(event_data, range_data)
+        for payload in self._process_and_notify(event_data, range_data):
+            yield payload
 
     def process_element2(self, range_msg: MessagePayload, ctx):
         """Process range updates from range_stream"""
         # Extract range value and timestamp
         range_value = float(range_msg.message_json.get("BCM_RangeDisplay"))
-        range_time = range_msg.event_time
+        # range_time = range_msg.event_time
         
         # Update state with tuple (value, timestamp)
-        self.range_state.update((range_value, range_time))
+        self.range_state.update((range_value, range_msg.event_time))
         
         # Get last charging event
         event_data = self.event_state.value()
-        self._process_and_notify(event_data, (range_value, range_time))
+        # if event_data:
+        #     self._process_and_notify(event_data, (range_value, range_msg.event_time))
+        for payload in self._process_and_notify(event_data, (range_value, range_msg.event_time)):
+          yield payload
 
     def _process_and_notify(self, event_data, range_data):
         """Common processing logic"""
+        
         if not event_data or not range_data:
-            return
-
+            return 
+        
         event_time = event_data["event_time"]
         range_value, range_time = range_data
         
         if abs(event_time - range_time) > 60000:
             return
 
-        payload = {
-            "vin": event_data["vin"],
-            "soc": event_data["soc"],
+        payload= {
+            **event_data,
             "range": range_value,
             "timestamp": max(event_time, range_time)
         }

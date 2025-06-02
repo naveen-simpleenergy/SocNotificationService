@@ -6,7 +6,7 @@ from dotenv import get_key, load_dotenv
 from utils  import setup_flink_environment,KafkaConfig,NotificationService
 import os,json,logging
 from utils import MessagePayload
-from udfs import VehicleStateProcessor,RangeProcessor
+from udfs import VehicleStateProcessor,RangeJoinProcessor
 load_dotenv()
 import sys
 
@@ -40,14 +40,16 @@ def main():
     enriched_stream = hmi_stream.connect(bcm_stream)\
         .key_by(lambda hmi_payload : hmi_payload.vin,lambda bcm_payload : bcm_payload.vin) \
         .process(VehicleStateProcessor())\
-        .map(lambda x : json.dumps(x), output_type=Types.STRING())\
+        # .map(lambda x : json.dumps(x), output_type=Types.STRING())\
     
     # enriched_stream.print()
     
-    # final_stream = enriched_stream.connect(range_stream)\
-    #     .key_by(lambda event_dict : event_dict['vin'], lambda range_payload : range_payload.vin)\
-    #     .process(RangeProcessor())\
-    #     .map(lambda x: json.dumps(x), output_type=Types.STRING())
+    final_stream = enriched_stream.connect(range_stream)\
+        .key_by(lambda event_dict : event_dict["vin"], lambda range_payload : range_payload.vin)\
+        .process(RangeJoinProcessor())\
+        .map(lambda x: json.dumps(x), output_type=Types.STRING())
+        
+    final_stream.print()
 
     env.execute("SOC Notification Service")
 
