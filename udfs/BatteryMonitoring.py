@@ -131,10 +131,10 @@ class VehicleStateProcessor(CoProcessFunction):
         try:
             print(f"Sending '{event}' notification for VIN={vin}: {soc} at {event_time}")
             self.last_event_type.update(event)
-            # self.notification_service.send_notification(
-            #     vin=vin,
-            #     soc=soc,
-            #     event=event,
-            # )
+            self.notification_service.send_notification(
+                vin=vin,
+                soc=soc,
+                event=event,
+            )
         except Exception as e:
             print(f"Notification failed for VIN={vin}: {str(e)}")

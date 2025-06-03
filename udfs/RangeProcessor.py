@@ -8,15 +8,16 @@ class RangeJoinProcessor(KeyedCoProcessFunction):
         self.notification_service = NotificationService()
 
     def open(self, runtime_context):
-        # Store range as (value, timestamp) tuple
         self.range_state = runtime_context.get_state(
             ValueStateDescriptor("range_state", Types.TUPLE([Types.FLOAT(), Types.LONG()]))
         )
-        # Store last charging event
         self.event_state = runtime_context.get_state(
             ValueStateDescriptor("event_state", Types.PICKLED_BYTE_ARRAY())
         )
-
+        self.last_emitted_state = runtime_context.get_state(
+            ValueStateDescriptor("last_emitted_state", Types.PICKLED_BYTE_ARRAY())
+        )
+        
     def process_element1(self, event_data: dict, ctx):
         """Process charging events from enriched_stream"""
         if event_data.get("event") != "chargingStarted":
@@ -26,32 +27,23 @@ class RangeJoinProcessor(KeyedCoProcessFunction):
         self.event_state.update(event_data)
         range_data = self.range_state.value()
         
-        # if range_data:
-        #     self._process_and_notify(event_data, range_data)
-        for payload in self._process_and_notify(event_data, range_data):
-            yield payload
+        if range_data: 
+            for payload in self._process_and_notify(event_data, range_data):
+                yield payload
 
     def process_element2(self, range_msg: MessagePayload, ctx):
         """Process range updates from range_stream"""
-        # Extract range value and timestamp
-        range_value = float(range_msg.message_json.get("BCM_RangeDisplay"))
-        # range_time = range_msg.event_time
-        
-        # Update state with tuple (value, timestamp)
+        range_value = float(range_msg.message_json.get("BCM_RangeDisplay"))        
         self.range_state.update((range_value, range_msg.event_time))
         
-        # Get last charging event
         event_data = self.event_state.value()
-        # if event_data:
-        #     self._process_and_notify(event_data, (range_value, range_msg.event_time))
-        for payload in self._process_and_notify(event_data, (range_value, range_msg.event_time)):
-          yield payload
+        if event_data:
+            for payload in self._process_and_notify(event_data, (range_value, range_msg.event_time)):
+                yield payload
 
     def _process_and_notify(self, event_data, range_data):
         """Common processing logic"""
         
-        if not event_data or not range_data:
-            return 
         
         event_time = event_data["event_time"]
         range_value, range_time = range_data
@@ -64,13 +56,20 @@ class RangeJoinProcessor(KeyedCoProcessFunction):
             "range": range_value,
             "timestamp": max(event_time, range_time)
         }
-
+        
+        last_emitted = self.last_emitted_state.value()
+        if last_emitted:
+            same_soc = payload["soc"] == last_emitted["soc"]
+            range_diff = abs(payload["range"] - last_emitted["range"])
+            if same_soc and range_diff < 1.0:
+                return
+        self.last_emitted_state.update(payload)
         print(f"Generated payload: {payload}") 
         yield payload
-        # Send notification
-        # self.notification_service.send_notification_payload2(
-        #     vin=payload["vin"],
-        #     soc=payload["soc"],
-        #     range=payload["range"],
-        #     time=payload["timestamp"]
-        # )
+        
+        self.notification_service.send_notification_payload2(
+            vin=payload["vin"],
+            soc=payload["soc"],
+            range=payload["range"],
+            time=payload["timestamp"]
+        )

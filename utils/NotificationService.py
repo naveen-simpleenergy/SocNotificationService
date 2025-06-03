@@ -1,7 +1,7 @@
 import requests
 import os
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Optional
+from typing import  Dict
 from dotenv import load_dotenv
 import uuid
 
@@ -44,7 +44,32 @@ class NotificationService():
             print(f"Notification API error: {str(e)}")
             return False
     
-
+    def send_notification_payload2(self, vin: str, soc: float, range: float, time: datetime) -> bool:
+        """
+        Send notification with additional range information.
+        
+        Args:
+            vin: Vehicle identification number
+            soc: State of charge percentage
+            range: Estimated range in kilometers
+            time: Timestamp of the event
+        Returns:
+            bool: True if notification was successfully sent
+        """
+        payload_2 = self._range_payload(vin=vin, soc=soc, range=range,time=time)
+      
+        headers = {
+            "x-api-key": self.api_key,
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            response = requests.post(self.api_endpoint, json=payload_2, headers=headers, timeout=self.timeout)
+            response.raise_for_status()
+            return True
+        except requests.RequestException as e:
+            print(f"Notification API error: {str(e)}")
+            return False
 
     
     def _build_payload(self, vin: str,soc:float,event:str) -> Dict:
@@ -56,6 +81,19 @@ class NotificationService():
                 "event": event,
                 "vin": vin,
                 "soc": soc,
+            }
+        }
+        
+    def _range_payload(self, vin: str, soc: float, range: float, time: datetime) -> Dict:
+        """Construct the API request payload with range information"""
+        return {
+            "channel": ["dynamic-island"],
+            "type": "bsnn",
+            "data": {
+                "vin": vin,
+                "soc": soc,
+                "range": range,
+                "timestamp": self._format_timestamp(time)
             }
         }
     
