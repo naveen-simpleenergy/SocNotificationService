@@ -97,11 +97,9 @@ class NotificationService():
             }
         }
     
-    def _format_timestamp(self, dt: datetime) -> str:
-        """Format datetime to ISO-8601 with UTC timezone"""
-        if not isinstance(dt, datetime):
-            raise TypeError(
-                f"Invalid timestamp type. Expected datetime, got {type(dt)}. "
-                f"Raw value: {dt} (verify epoch conversion)"
-            )
-        return dt.astimezone(timezone.utc).isoformat()
+    def _format_timestamp(epoch_ms: int) -> str:
+        """Convert epoch ms to IST ISO-8601 string"""
+        dt_utc = datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc)
+        ist = timezone(timedelta(hours=5, minutes=30))
+        dt_ist = dt_utc.astimezone(ist)
+        return dt_ist.isoformat()

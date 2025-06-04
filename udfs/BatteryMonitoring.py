@@ -21,7 +21,7 @@ class VehicleStateProcessor(CoProcessFunction):
         self.bcm_time_state = runtime_context.get_state(
             ValueStateDescriptor("bcm_event_time", Types.LONG()))
         self.current_soc_state = runtime_context.get_state(
-            ValueStateDescriptor("current_soc", Types.FLOAT()))
+            ValueStateDescriptor("current_soc", Types.INT()))
         self.current_charging_state = runtime_context.get_state(
             ValueStateDescriptor("current_charging", Types.INT()))
         self.prev_charging_state = runtime_context.get_state(
@@ -32,7 +32,7 @@ class VehicleStateProcessor(CoProcessFunction):
             ValueStateDescriptor("has_seen_charger_connected_state", Types.BOOLEAN()))
 
     def process_element1(self, hmi_msg: MessagePayload, ctx):
-        soc = float(hmi_msg.message_json.get('EffectiveSOC'))
+        soc = int(hmi_msg.message_json.get('EffectiveSOC'))
         vin = hmi_msg.vin
         hmi_time = hmi_msg.event_time
 
@@ -44,14 +44,23 @@ class VehicleStateProcessor(CoProcessFunction):
             prev_soc = self.current_soc_state.value()
             self.current_soc_state.update(soc)
 
-            if  self.current_charging_state.value() == 1 and prev_soc is not None:
-                if soc != prev_soc and self.last_event_type.value() =='chargingStarted':
-                    yield {
-                        "vin": vin,
-                        "event": self.last_event_type.value(),
-                        "soc": soc,
-                        "event_time": hmi_time
+            if self.current_charging_state.value() == 1 and prev_soc is not None:
+                if soc != prev_soc:
+                    if self.last_event_type.value() == 'chargingStarted':
+                        yield {
+                            "vin": vin,
+                            "event": "chargingStarted",
+                            "soc": soc,
+                            "event_time": hmi_time
                         }
+                    else:
+                        yield {
+                            "vin": vin,
+                            "event": "socUpdate",
+                            "soc": soc,
+                            "event_time": hmi_time
+                        }
+
                     
 
         if self.bcm_time_state.value() is not None :
