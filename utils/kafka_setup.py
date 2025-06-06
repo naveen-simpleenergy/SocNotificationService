@@ -28,7 +28,6 @@ class KafkaConfig:
     @staticmethod
     def get_kafka_partition_count():
         """Fetch the number of partitions for the Kafka topic with SASL authentication."""
-        print("hello")
         admin_client = KafkaAdminClient(
             bootstrap_servers=KafkaConfig.CONSUMER_BROKER,
             security_protocol=KafkaConfig.SECURITY_PROTOCOL,
