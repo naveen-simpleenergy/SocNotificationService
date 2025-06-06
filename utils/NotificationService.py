@@ -91,9 +91,9 @@ class NotificationService():
             "type": "bsnn",
             "data": {
                 "vin": vin,
-                "soc": soc,
+                "percentage": soc,
                 "range": range,
-                "timestamp": self._format_timestamp(time)
+                "startTime": time
             }
         }
     

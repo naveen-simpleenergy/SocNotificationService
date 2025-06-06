@@ -57,11 +57,22 @@ class RangeJoinProcessor(KeyedCoProcessFunction):
             "timestamp": max(event_time, range_time)
         }
         
-
+        current_soc = payload["soc"]
+        current_range = payload["range"]
+        last_emitted = self.last_emitted_state.value()
+        
+        if last_emitted:
+            last_soc, last_range = last_emitted
+            if current_soc == last_soc and abs(current_range - last_range) <= 1:
+                return
+        
+        self.last_emitted_state.update((current_soc, current_range))
+        
         print(f"Generated payload: {payload}") 
         yield payload
         
         if event_data["event"] in ["chargingStarted", "socUpdate"]:
+            print(f"Dynamic island notification sent for {payload['vin']} at {payload['timestamp']}")
             self.notification_service.send_notification_payload2(
                 vin=payload["vin"],
                 soc=payload["soc"],
