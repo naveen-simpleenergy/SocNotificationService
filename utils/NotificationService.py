@@ -1,7 +1,7 @@
 import requests
 import os
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Optional
+from typing import  Dict
 from dotenv import load_dotenv
 import uuid
 
@@ -44,7 +44,32 @@ class NotificationService():
             print(f"Notification API error: {str(e)}")
             return False
     
-
+    def send_notification_payload2(self, vin: str, soc: float, range: float, time: datetime) -> bool:
+        """
+        Send notification with additional range information.
+        
+        Args:
+            vin: Vehicle identification number
+            soc: State of charge percentage
+            range: Estimated range in kilometers
+            time: Timestamp of the event
+        Returns:
+            bool: True if notification was successfully sent
+        """
+        payload_2 = self._range_payload(vin=vin, soc=soc, range=range,time=time)
+      
+        headers = {
+            "x-api-key": self.api_key,
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            response = requests.post(self.api_endpoint, json=payload_2, headers=headers, timeout=self.timeout)
+            response.raise_for_status()
+            return True
+        except requests.RequestException as e:
+            print(f"Notification API error: {str(e)}")
+            return False
 
     
     def _build_payload(self, vin: str,soc:float,event:str) -> Dict:
@@ -58,12 +83,23 @@ class NotificationService():
                 "soc": soc,
             }
         }
+        
+    def _range_payload(self, vin: str, soc: float, range: float, time: datetime) -> Dict:
+        """Construct the API request payload with range information"""
+        return {
+            "channel": ["dynamic-island"],
+            "type": "bsnn",
+            "data": {
+                "vin": vin,
+                "percentage": soc,
+                "range": range,
+                "startTime": time
+            }
+        }
     
-    def _format_timestamp(self, dt: datetime) -> str:
-        """Format datetime to ISO-8601 with UTC timezone"""
-        if not isinstance(dt, datetime):
-            raise TypeError(
-                f"Invalid timestamp type. Expected datetime, got {type(dt)}. "
-                f"Raw value: {dt} (verify epoch conversion)"
-            )
-        return dt.astimezone(timezone.utc).isoformat()
+    def _format_timestamp(epoch_ms: int) -> str:
+        """Convert epoch ms to IST ISO-8601 string"""
+        dt_utc = datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc)
+        ist = timezone(timedelta(hours=5, minutes=30))
+        dt_ist = dt_utc.astimezone(ist)
+        return dt_ist.isoformat()
